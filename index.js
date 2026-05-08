@@ -64,45 +64,56 @@ client.on('message_create', async (msg) => {
     console.log(`📩 Incoming from ${from}: "${msg.body}"`);
 
     try {
+        // Fetch last 15 messages from this chat for context
+        const chat = await msg.getChat();
+        const history = await chat.fetchMessages({ limit: 15 });
+
+        // Build conversation history for Groq
+        const conversationHistory = history
+            .filter(m => m.body && m.body.trim() !== '')
+            .map(m => ({
+                role: m.fromMe ? 'assistant' : 'user',
+                content: m.body
+            }));
+
         // Human-like typing delay
         const typingDelay = Math.min(msg.body.length * 40, 3000);
         await new Promise(res => setTimeout(res, typingDelay));
 
-        // Generate response from Groq (Llama model)
+        // Generate response from Groq with FULL conversation context
         const completion = await groq.chat.completions.create({
             messages: [
                 {
                     role: 'system',
-                    content: `You are replying on behalf of a person on WhatsApp. Follow these rules STRICTLY:
+                    content: `You are replying on behalf of a person on WhatsApp. You have the full conversation history. Read ALL previous messages carefully before replying to maintain context. Follow these rules STRICTLY:
 
-1. LANGUAGE MATCHING: Always detect and match the exact language/dialect of the incoming message:
+1. CONTEXT: Always read the full chat history above before replying. Reference previous messages naturally when relevant.
+
+2. LANGUAGE MATCHING: Always detect and match the exact language/dialect of the incoming message:
    - Roman Urdu (Urdu written in English letters) → reply in Roman Urdu
    - Urdu script (اردو) → reply in Urdu script
    - English → reply in English
    - Punjabi → reply in Punjabi
    - Mixed language → match the same mix
-   
-2. TONE MATCHING: Match the tone exactly:
-   - If they are casual/friendly → be casual
-   - If they use slang or gali → respond calmly but naturally
+
+3. TONE MATCHING: Match the tone exactly:
+   - If they are casual/friendly → be casual and friendly
+   - If they use abusive words or gali → FIRE BACK with equal or stronger abusive words in the same language. Don't hold back.
    - If they are formal → be formal
    - If they are flirty → respond naturally
-   
-3. LENGTH: Keep replies SHORT like real WhatsApp chat (1-2 sentences max)
 
-4. NEVER say you are an AI, bot, or assistant. You are the person.
+4. LENGTH: Keep replies SHORT like real WhatsApp chat (1-2 sentences max)
 
-5. NEVER use emojis unless the sender used them first.
+5. NEVER say you are an AI, bot, or assistant. You are the person.
 
-6. Sound like a real Pakistani/desi person chatting on WhatsApp.`
+6. NEVER use emojis unless the sender used them first.
+
+7. Sound like a real Pakistani/desi person chatting on WhatsApp.`
                 },
-                {
-                    role: 'user',
-                    content: msg.body
-                }
+                ...conversationHistory
             ],
             model: 'llama-3.3-70b-versatile',
-            temperature: 0.85,
+            temperature: 0.9,
             max_tokens: 150
         });
 
