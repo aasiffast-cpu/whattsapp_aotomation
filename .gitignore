@@ -1,0 +1,20 @@
+# Dependencies - run "npm install" after cloning
+node_modules/
+
+# Secret API Key - create your own .env file after cloning
+.env
+
+# WhatsApp session data - you need to scan QR again after cloning
+.wwebjs_auth/
+.wwebjs_cache/
+
+# QR code image (temporary file)
+SCAN_THIS_QR_CODE.png
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
