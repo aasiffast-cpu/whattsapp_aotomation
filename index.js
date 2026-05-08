@@ -3,15 +3,11 @@ const qrcode = require('qrcode-terminal');
 const QRCode = require('qrcode');
 const path = require('path');
 const fs = require('fs');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require('groq-sdk');
 require('dotenv').config();
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    systemInstruction: "You are an AI automation responding as the user on WhatsApp. Your goal is to be helpful and natural. Keep replies concise and human-like. Do not use overly formal language unless the sender is formal. Avoid saying 'As an AI...' or 'How can I help you today?' in a robotic way. Just chat naturally."
-});
+// Initialize Groq AI (fast, free, powered by Llama)
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // Initialize WhatsApp Client
 const client = new Client({
@@ -48,42 +44,58 @@ client.on('ready', () => {
     // Delete QR image once connected
     const qrImagePath = path.join(__dirname, 'SCAN_THIS_QR_CODE.png');
     if (fs.existsSync(qrImagePath)) fs.unlinkSync(qrImagePath);
-    console.log('\n✅ WhatsApp Bot is Ready!');
+    console.log('\n✅ WhatsApp Bot is Ready! (Powered by Groq AI)');
     console.log('Listening for incoming messages...\n');
 });
 
 // Handle Incoming Messages
-client.on('message', async (msg) => {
-    // Only reply to individual chats (exclude groups and your own messages)
-    if (msg.from.endsWith('@c.us') && !msg.fromMe) {
-        console.log(`Incoming message from ${msg.from}: "${msg.body}"`);
+client.on('message_create', async (msg) => {
+    const from = msg.from;
 
-        try {
-            const chat = await msg.getChat();
-            
-            // Show "typing..." status to feel more human
-            await chat.sendStateTyping();
+    // Strict filter: only real individual chats
+    // Allow @c.us (old format) and @lid (new WhatsApp format)
+    // Block: groups, newsletters, broadcasts, own messages
+    const isRealPerson = (from.endsWith('@c.us') || from.endsWith('@lid')) &&
+                         !from.includes('@newsletter') &&
+                         from !== 'status@broadcast';
 
-            // Small delay to simulate typing time
-            const typingDelay = Math.min(msg.body.length * 50, 3000); 
-            await new Promise(res => setTimeout(res, typingDelay));
+    if (!isRealPerson || msg.fromMe || msg.body.trim() === '') return;
 
-            // Generate response from Gemini
-            const result = await model.generateContent(msg.body);
-            const responseText = result.response.text();
+    console.log(`📩 Incoming from ${from}: "${msg.body}"`);
 
-            // Send the reply
-            await msg.reply(responseText);
-            console.log(`Replied with: "${responseText.substring(0, 50)}..."`);
+    try {
+        // Human-like typing delay
+        const typingDelay = Math.min(msg.body.length * 40, 3000);
+        await new Promise(res => setTimeout(res, typingDelay));
 
-            // Stop typing status
-            await chat.clearState();
-        } catch (error) {
-            console.error('❌ Error generating or sending response:', error);
-        }
+        // Generate response from Groq (Llama model)
+        const completion = await groq.chat.completions.create({
+            messages: [
+                {
+                    role: 'system',
+                    content: 'You are an AI automation responding as the user on WhatsApp. Be natural, concise, and human-like. Do not use robotic phrases. Reply in the same language the person messaged in. Keep replies short like a real WhatsApp chat.'
+                },
+                {
+                    role: 'user',
+                    content: msg.body
+                }
+            ],
+            model: 'llama-3.3-70b-versatile',
+            temperature: 0.8,
+            max_tokens: 200
+        });
+
+        const responseText = completion.choices[0]?.message?.content || "Hey! I'll get back to you soon.";
+
+        // Send the reply
+        await msg.reply(responseText);
+        console.log(`✅ Replied: "${responseText.substring(0, 80)}"`);
+
+    } catch (error) {
+        console.error('❌ Error:', error.message);
     }
 });
 
 // Start the client
-console.log('Starting WhatsApp client...');
+console.log('Starting WhatsApp Bot (Groq AI)...');
 client.initialize();
