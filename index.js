@@ -18,6 +18,16 @@ ffmpeg.setFfprobePath(ffprobePath);
 // Initialize Groq AI
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// Health Check Server for Railway
+const http = require('http');
+const port = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('WhatsApp Bot is running!\n');
+}).listen(port, '0.0.0.0', () => {
+    console.log(`📡 Health-check server listening on port ${port}`);
+});
+
 // Initialize WhatsApp Client
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -32,7 +42,8 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--single-process',
-            '--disable-gpu'
+            '--disable-gpu',
+            '--disable-software-rasterizer'
         ]
     }
 });
