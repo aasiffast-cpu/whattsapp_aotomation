@@ -18,14 +18,24 @@ ffmpeg.setFfprobePath(ffprobePath);
 // Initialize Groq AI
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Health Check Server for Railway
+// Health Check & QR Server for Railway
 const http = require('http');
 const port = process.env.PORT || 3000;
 http.createServer((req, res) => {
+    if (req.url === '/qr') {
+        const qrPath = path.join(__dirname, 'SCAN_THIS_QR_CODE.png');
+        if (fs.existsSync(qrPath)) {
+            res.writeHead(200, { 'Content-Type': 'image/png' });
+            return res.end(fs.readFileSync(qrPath));
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            return res.end('QR Code not ready yet. Please refresh in a few seconds.');
+        }
+    }
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('WhatsApp Bot is running!\n');
+    res.end('WhatsApp Bot is running! Visit /qr to scan.');
 }).listen(port, '0.0.0.0', () => {
-    console.log(`📡 Health-check server listening on port ${port}`);
+    console.log(`📡 Health-check & QR server listening on port ${port}`);
 });
 
 // Initialize WhatsApp Client
