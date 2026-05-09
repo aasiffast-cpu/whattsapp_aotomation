@@ -29,14 +29,12 @@ http.createServer((req, res) => {
             return res.end(fs.readFileSync(qrPath));
         } else {
             res.writeHead(200, { 'Content-Type': 'text/plain' });
-            return res.end('QR Code not ready yet. Please refresh in a few seconds.');
+            return res.end('QR not ready. Refresh in 5s.');
         }
     }
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('WhatsApp Bot is running! Visit /qr to scan.');
-}).listen(port, '0.0.0.0', () => {
-    console.log(`📡 Health-check & QR server listening on port ${port}`);
-});
+    res.end('Bot Active. Go to /qr');
+}).listen(port, '0.0.0.0');
 
 // Initialize WhatsApp Client
 const client = new Client({
@@ -48,12 +46,10 @@ const client = new Client({
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
             '--no-zygote',
             '--single-process',
             '--disable-gpu',
-            '--disable-software-rasterizer'
+            '--js-flags="--max-old-space-size=256"' // Limit JS memory
         ]
     }
 });
