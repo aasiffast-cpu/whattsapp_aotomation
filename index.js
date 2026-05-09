@@ -7,13 +7,9 @@ const Groq = require('groq-sdk');
 const googleTTS = require('google-tts-api');
 const axios = require('axios');
 const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
-const ffprobePath = require('ffprobe-static').path;
 require('dotenv').config();
 
-// Set ffmpeg and ffprobe paths
-ffmpeg.setFfmpegPath(ffmpegPath);
-ffmpeg.setFfprobePath(ffprobePath);
+// ffmpeg and ffprobe will be automatically detected from the system path (Docker/Railway)
 
 // Initialize Groq AI
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
