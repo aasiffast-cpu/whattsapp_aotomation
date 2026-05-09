@@ -52,18 +52,20 @@ const client = new Client({
 
 // QR Code handling
 client.on('qr', async (qr) => {
-    console.log('\n--- SCAN THIS QR CODE WITH YOUR WHATSAPP ---');
+    console.log('\n--- SCAN THIS QR CODE ---');
     qrcode.generate(qr, { small: true });
     
     const qrImagePath = path.join(__dirname, 'SCAN_THIS_QR_CODE.png');
-    await QRCode.toFile(qrImagePath, qr, {
-        color: { dark: '#000000', light: '#FFFFFF' },
-        width: 400,
-        margin: 2
-    });
-    console.log(`✅ QR Code saved: ${qrImagePath}`);
-    const { exec } = require('child_process');
-    exec(`start "" "${qrImagePath}"`);
+    try {
+        await QRCode.toFile(qrImagePath, qr, {
+            color: { dark: '#000000', light: '#FFFFFF' },
+            width: 500,
+            margin: 2
+        });
+        console.log(`✅ QR Code image updated at: ${qrImagePath}`);
+    } catch (err) {
+        console.error('❌ Failed to save QR image:', err);
+    }
 });
 
 client.on('ready', () => {
