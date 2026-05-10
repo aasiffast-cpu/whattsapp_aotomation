@@ -9,7 +9,23 @@ const axios = require('axios');
 const ffmpeg = require('fluent-ffmpeg');
 require('dotenv').config();
 
-// ffmpeg and ffprobe will be automatically detected from the system path (Docker/Railway)
+// Try to use static ffmpeg if available (for local Windows), otherwise use system path (for Railway/Linux)
+try {
+    const ffmpegPath = require('ffmpeg-static');
+    const ffprobePath = require('ffprobe-static').path;
+    
+    if (ffmpegPath && ffprobePath) {
+        process.env.FFMPEG_PATH = ffmpegPath; // Set globally
+        ffmpeg.setFfmpegPath(ffmpegPath);
+        ffmpeg.setFfprobePath(ffprobePath);
+        console.log(`✅ FFmpeg Path: ${ffmpegPath}`);
+        console.log(`✅ FFprobe Path: ${ffprobePath}`);
+    } else {
+        throw new Error('Static binaries not properly loaded');
+    }
+} catch (e) {
+    console.log('📡 Using system FFmpeg/FFprobe (Static binaries not found or failed).');
+}
 
 // Initialize Groq AI
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -43,9 +59,7 @@ const client = new Client({
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--no-zygote',
-            '--single-process',
-            '--disable-gpu',
-            '--js-flags="--max-old-space-size=256"' // Limit JS memory
+            '--disable-gpu'
         ]
     }
 });
@@ -187,12 +201,32 @@ STRICT RULES:
 
                 await new Promise((resolve, reject) => {
                     let command = ffmpeg();
+                    const ffmpegPath = require('ffmpeg-static');
+                    const ffprobePath = require('ffprobe-static').path;
+                    command.setFfmpegPath(ffmpegPath);
+                    command.setFfprobePath(ffprobePath);
+
                     tempMp3s.forEach(file => { command = command.input(file); });
-                    command.on('end', resolve).on('error', reject).mergeToFile(tempOgg, __dirname);
+                    command.on('end', resolve).on('error', (err) => {
+                        console.error('❌ FFmpeg Merge Error:', err.message);
+                        reject(err);
+                    }).mergeToFile(tempOgg, __dirname);
                 });
 
                 await new Promise((resolve, reject) => {
-                    ffmpeg(tempOgg).toFormat('ogg').audioCodec('libopus').on('end', resolve).on('error', reject).save(finalOgg);
+                    const ffmpegPath = require('ffmpeg-static');
+                    const ffprobePath = require('ffprobe-static').path;
+                    ffmpeg(tempOgg)
+                        .setFfmpegPath(ffmpegPath)
+                        .setFfprobePath(ffprobePath)
+                        .toFormat('ogg')
+                        .audioCodec('libopus')
+                        .on('end', resolve)
+                        .on('error', (err) => {
+                            console.error('❌ FFmpeg Convert Error:', err.message);
+                            reject(err);
+                        })
+                        .save(finalOgg);
                 });
 
                 const media = MessageMedia.fromFilePath(finalOgg);
