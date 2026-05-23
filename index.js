@@ -145,13 +145,44 @@ client.on('message_create', async (msg) => {
 
     try {
         const chat = await msg.getChat();
-        const history = await chat.fetchMessages({ limit: 10 });
+        const history = await chat.fetchMessages({ limit: 40 });
         const conversationHistory = history
             .filter(m => m.body && m.body.trim() !== '')
             .map(m => ({
                 role: m.fromMe ? 'assistant' : 'user',
                 content: m.body
             }));
+
+        // CHECK FOR RESEND / FORWARD REQUESTS
+        const userMessageLower = userMessage.toLowerCase();
+        const isRequestToResend = /dobara|phir se|resend|send again|wapis bhej|wapas bhej|dubara|forward|screenshot|ss |screen shot/i.test(userMessageLower);
+        if (isRequestToResend) {
+            console.log(`🔄 User requested to resend/forward previous data...`);
+            // Find the most recent media message or long message in the history (excluding the current message)
+            const targetMsg = history
+                .slice()
+                .reverse()
+                .find(m => m.id.id !== msg.id.id && (m.hasMedia || (m.body && m.body.length > 50)));
+
+            if (targetMsg) {
+                console.log(`📦 Found message to forward: ${targetMsg.id.id}`);
+                try {
+                    // Send a natural human-like confirmation reply first
+                    const isUrduScript = /[\u0600-\u06FF]/.test(userMessage);
+                    const replyText = isUrduScript ? "جی ابھی بھیجتا ہوں" : "Ji abhi send karta hun";
+                    await msg.reply(replyText);
+                    console.log(`✅ Sent text confirmation reply.`);
+
+                    // Wait a second to feel natural, then forward the actual message
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    await targetMsg.forward(from);
+                    console.log(`✅ Successfully forwarded previous message.`);
+                    return; // Done
+                } catch (err) {
+                    console.error(`❌ Failed to forward message:`, err.message);
+                }
+            }
+        }
 
         await new Promise(res => setTimeout(res, 2000));
 
@@ -162,9 +193,11 @@ client.on('message_create', async (msg) => {
                     content: `Your name is ASIF. You are a real person from Pakistan chatting on WhatsApp.
 STRICT RULES:
 1. Always talk as ASIF. 
-2. Match the user's language EXACTLY (Roman Urdu -> Roman Urdu, Urdu Script -> Urdu Script, English -> English).
-3. Keep replies very SHORT and to the point (1-2 sentences max).
-4. NEVER reveal you are an AI. You are a human named Asif.`
+2. Match the user's language and tone/vibe EXACTLY (Roman Urdu -> Roman Urdu, Urdu Script -> Urdu Script, English -> English).
+3. If the user uses swearing/slang (gali), respond in the exact same casual/aggressive tone (gali ka jawab usi tarah aggressive ya slang me do). Match their energy perfectly.
+4. Keep replies extremely casual, natural, and short (1-2 sentences max, like a real WhatsApp text). Never use formal grammar.
+5. Do NOT put trailing dots (full stops) or question marks at the very end of your messages.
+6. NEVER reveal you are an AI. You are a human named Asif.`
                 },
                 ...conversationHistory
             ],
@@ -172,7 +205,15 @@ STRICT RULES:
             temperature: 0.8,
         });
 
-        const responseText = completion.choices[0]?.message?.content || "Theek hai!";
+        let responseText = completion.choices[0]?.message?.content || "Theek hai!";
+        
+        // Remove all dots/full-stops completely (both end and middle) to keep it extremely casual
+        responseText = responseText.replace(/\./g, '');
+        
+        // Remove all question marks and exclamation marks completely
+        responseText = responseText.replace(/[\?\!]+/g, '');
+        
+        responseText = responseText.trim();
 
         // CONDITIONAL REPLY: Voice for Voice, Text for Text
         if (isIncomingVoice) {
@@ -201,10 +242,14 @@ STRICT RULES:
 
                 await new Promise((resolve, reject) => {
                     let command = ffmpeg();
-                    const ffmpegPath = require('ffmpeg-static');
-                    const ffprobePath = require('ffprobe-static').path;
-                    command.setFfmpegPath(ffmpegPath);
-                    command.setFfprobePath(ffprobePath);
+                    try {
+                        const ffmpegPath = require('ffmpeg-static');
+                        const ffprobePath = require('ffprobe-static').path;
+                        if (ffmpegPath) command.setFfmpegPath(ffmpegPath);
+                        if (ffprobePath) command.setFfprobePath(ffprobePath);
+                    } catch (e) {
+                        // Using system FFmpeg/FFprobe fallback
+                    }
 
                     tempMp3s.forEach(file => { command = command.input(file); });
                     command.on('end', resolve).on('error', (err) => {
@@ -214,11 +259,16 @@ STRICT RULES:
                 });
 
                 await new Promise((resolve, reject) => {
-                    const ffmpegPath = require('ffmpeg-static');
-                    const ffprobePath = require('ffprobe-static').path;
-                    ffmpeg(tempOgg)
-                        .setFfmpegPath(ffmpegPath)
-                        .setFfprobePath(ffprobePath)
+                    let command = ffmpeg(tempOgg);
+                    try {
+                        const ffmpegPath = require('ffmpeg-static');
+                        const ffprobePath = require('ffprobe-static').path;
+                        if (ffmpegPath) command.setFfmpegPath(ffmpegPath);
+                        if (ffprobePath) command.setFfprobePath(ffprobePath);
+                    } catch (e) {
+                        // Using system FFmpeg/FFprobe fallback
+                    }
+                    command
                         .toFormat('ogg')
                         .audioCodec('libopus')
                         .on('end', resolve)
@@ -242,7 +292,7 @@ STRICT RULES:
             }
         } else {
             await msg.reply(responseText);
-            console.log(`✅ Sent text reply.`);
+            console.log(`✅ Sent text reply: "${responseText}"`);
         }
 
     } catch (error) {
